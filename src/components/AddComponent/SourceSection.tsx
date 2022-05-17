@@ -15,7 +15,7 @@ import { useFormValues } from '../form-context';
 import { AddComponentValues } from './AddComponentForm';
 import { GitAuthorization } from './GitAuthorization';
 import { GitOptions } from './GitOptions';
-import { useComponentDetection } from './utils';
+import { useAccessCheck, useComponentDetection } from './utils';
 import { gitUrlRegex, containerImageRegex } from './validation-utils';
 
 type SourceSectionProps = {
@@ -49,6 +49,8 @@ export const SourceSection: React.FC<SourceSectionProps> = ({ onSamplesClick }) 
     gitOptions.isMultiComponent,
     gitOptions.authSecret,
   );
+
+  const isRepoAccessible = useAccessCheck(sourceUrl);
 
   const handleSourceChange = React.useCallback(() => {
     const searchTerm = source;
@@ -146,7 +148,7 @@ export const SourceSection: React.FC<SourceSectionProps> = ({ onSamplesClick }) 
           </GridItem>
         </Grid>
       </FormGroup>
-      {showAuthorization && (
+      {showAuthorization && !isRepoAccessible && (
         <ExpandableSection
           isExpanded={authorizationExpanded}
           onToggle={setAuthorizationExpanded}

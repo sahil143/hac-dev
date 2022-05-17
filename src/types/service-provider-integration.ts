@@ -30,3 +30,16 @@ export enum SPIAccessTokenBindingPhase {
   Injected = 'Injected',
   Error = 'Error',
 }
+
+export type SPIAccessCheckKind = K8sResourceCommon & {
+  spec: {
+    repoUrl: string;
+  };
+  status?: {
+    accessible: boolean;
+    accessibility: string;
+    repoType: string;
+    errorReason?: string;
+    errorMessage?: string;
+  };
+};

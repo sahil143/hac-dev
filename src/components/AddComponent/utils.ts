@@ -1,82 +1,55 @@
 import * as React from 'react';
-import { commonFetch } from '@openshift/dynamic-plugin-sdk-utils';
+import { k8sCreateResource } from '@openshift/dynamic-plugin-sdk-utils';
 import { useFormikContext } from 'formik';
 import { useK8sWatchResource } from '../../dynamic-plugin-sdk';
 import {
   ComponentDetectionQueryGroupVersionKind,
+  SPIAccessCheckGroupVersionKind,
+  SPIAccessCheckModel,
   SPIAccessTokenBindingGroupVersionKind,
 } from '../../models';
 import {
   ComponentDetectionQueryKind,
   DetectedComponents,
+  SPIAccessCheckKind,
   SPIAccessTokenBindingKind,
   SPIAccessTokenBindingPhase,
 } from '../../types';
-import { createComponentDetectionQuery } from '../../utils/create-utils';
+import {
+  createComponentDetectionQuery,
+  initiateAccessTokenBinding,
+} from '../../utils/create-utils';
 import { NamespaceContext } from './../NamespacedPage/NamespacedPage';
 
 /**
- * Watch the SPIAccessTokenBinding resource and open auth window when provided.
- * Upon successful injection, set the specified secret.
+ * Create the SPIAccessTokenBinding resource when source changes
+ * and set the specified secret upon successful injection.
+ *
+ * @returns oAuth URL provided by the binding
  */
-export const useAccessTokenBindingAuth = (name: string) => {
+export const useAccessTokenBindingAuth = (source: string): [string, boolean] => {
   const { namespace } = React.useContext(NamespaceContext);
   const { setFieldValue } = useFormikContext();
-  const [binding, loaded] = useK8sWatchResource<SPIAccessTokenBindingKind>({
-    groupVersionKind: SPIAccessTokenBindingGroupVersionKind,
-    name,
-    namespace,
-  });
+  const [name, setName] = React.useState<string>();
 
   React.useEffect(() => {
-    if (!name || !loaded) return;
-    const oAuthUrl = binding.status?.oAuthUrl;
-    if (oAuthUrl) {
-      const urlParams = new URLSearchParams(oAuthUrl.split('?')[1]);
-      const spType = oAuthUrl.includes('/github/') ? 'github' : 'quay';
-      commonFetch(`/auth/${spType}/authenticate?state=${urlParams.get('state')}`)
-        .then((response) => response.body)
-        // copied from https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream
-        .then((rb: ReadableStream) => {
-          const reader = rb.getReader();
+    initiateAccessTokenBinding(source, namespace)
+      .then((resource) => {
+        setName(resource.metadata.name);
+      })
+      // eslint-disable-next-line no-console
+      .catch((e) => console.error('Error when initiating access token binding: ', e));
+  }, [namespace, source]);
 
-          return new ReadableStream({
-            start(controller) {
-              // The following function handles each data chunk
-              function push() {
-                // "done" is a Boolean and value a "Uint8Array"
-                reader.read().then(({ done, value }) => {
-                  // If there is no more data to read
-                  if (done) {
-                    controller.close();
-                    return;
-                  }
-                  // Get the data and send it to the browser via the controller
-                  controller.enqueue(value);
-                  push();
-                });
-              }
-
-              push();
-            },
-          });
-        })
-        .then((stream) => {
-          // Respond with our stream
-          return new Response(stream, { headers: { 'Content-Type': 'text/html' } }).text();
-        })
-        .then((result) => {
-          const authorizeWindow = window.open('about:blank');
-          authorizeWindow.document.open();
-          authorizeWindow.document.write(result);
-          authorizeWindow.document.close();
-        })
-        .catch((error) => {
-          // eslint-disable-next-line no-console
-          console.log('Error in oAuth url request', error);
-        });
-    }
-  }, [binding?.status?.oAuthUrl, loaded, name]);
+  const [binding, loaded] = useK8sWatchResource<SPIAccessTokenBindingKind>(
+    name
+      ? {
+          groupVersionKind: SPIAccessTokenBindingGroupVersionKind,
+          name,
+          namespace,
+        }
+      : {},
+  );
 
   React.useEffect(() => {
     if (!name || !loaded) return;
@@ -96,6 +69,8 @@ export const useAccessTokenBindingAuth = (name: string) => {
     binding?.status?.errorMessage,
     binding?.status?.syncedObjectRef?.name,
   ]);
+
+  return [binding?.status?.oAuthUrl, loaded];
 };
 
 /**
@@ -163,4 +138,50 @@ export const useComponentDetection = (
   }, [cdq, cdqName, createError, detectedComponents, loadError, loaded]);
 
   return [detectedComponents, error];
+};
+
+/**
+ * Create a new SPIAccessCheck when source changes,
+ * and return true if the source is accessible.
+ */
+export const useAccessCheck = (source: string) => {
+  const { namespace } = React.useContext(NamespaceContext);
+  const [name, setName] = React.useState<string>();
+
+  React.useEffect(() => {
+    if (source) {
+      k8sCreateResource({
+        model: SPIAccessCheckModel,
+        queryOptions: {
+          ns: namespace,
+        },
+        resource: {
+          apiVersion: `${SPIAccessCheckModel.apiGroup}/${SPIAccessCheckModel.apiVersion}`,
+          kind: SPIAccessCheckModel.kind,
+          metadata: {
+            generateName: 'hacdev-check-',
+            namespace,
+          },
+          spec: {
+            repoUrl: source,
+          },
+        },
+      }).then((res) => {
+        // TODO fix type for generateName resources not having name?
+        setName((res.metadata as any).name);
+      });
+    }
+  }, [namespace, source]);
+
+  const [accessCheck, loaded] = useK8sWatchResource<SPIAccessCheckKind>(
+    name
+      ? {
+          groupVersionKind: SPIAccessCheckGroupVersionKind,
+          name,
+          namespace,
+        }
+      : {},
+  );
+
+  return loaded && accessCheck?.status?.accessible;
 };
