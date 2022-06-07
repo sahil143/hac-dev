@@ -49,11 +49,11 @@ export const ComponentListItem: React.FC<ComponentListViewPageProps> = ({ compon
                   Code Repo:{' '}
                   <ExternalLink
                     href={
-                      component.spec.source.git.url ||
+                      component.spec.source?.git?.url ||
                       `https://${component.spec.source.image?.containerImage}`
                     }
                     text={
-                      component.spec.source.git.url || component.spec.source.image?.containerImage
+                      component.spec.source?.git?.url || component.spec.source.image?.containerImage
                     }
                   />
                 </DescriptionListDescription>

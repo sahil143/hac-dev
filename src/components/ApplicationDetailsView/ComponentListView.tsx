@@ -95,21 +95,18 @@ const ComponentListView: React.FC<ComponentListViewProps> = ({ applicationName, 
               </Link>
             </ToolbarItem>
           </ToolbarGroup>
-          <ToolbarGroup alignment={{ default: 'alignRight' }}>
+          <ToolbarGroup
+            alignment={{ default: 'alignLeft', md: 'alignLeft', lg: 'alignRight' }}
+            style={{ padding: 'var(--pf-global--spacer--sm)' }}
+          >
             {gitOpsDeploymentLoaded ? (
               gitOpsDeployment ? (
                 <>
                   <ToolbarItem>
                     {gitOpsDeploymentHealthStatusIcon} Application {gitOpsDeploymentHealthStatus}
                   </ToolbarItem>
-                  <ToolbarItem
-                    style={{
-                      color: 'var(--pf-global--palette--black-600)',
-                    }}
-                  >
-                    |
-                  </ToolbarItem>
-                  <ToolbarItem>
+                  <ToolbarItem variant="separator" />
+                  <ToolbarItem variant="chip-group">
                     Deployment Strategy:{' '}
                     <Label>{getGitOpsDeploymentStrategy(gitOpsDeployment)}</Label>
                   </ToolbarItem>
