@@ -1,0 +1,102 @@
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: build-pipeline-config
+#   namespace: sbudhwar-1-tenant
+# data:
+#   config.yaml: |
+#     default-pipeline-name: docker-builder
+#     pipelines:
+#     - name: fbc-builder
+#       bundle: quay.io/redhat-appstudio-tekton-catalog/pipeline-fbc-builder:032a8745d43a942a247f365fc890b06023ccd67d
+#     - name: docker-builder
+#       bundle: quay.io/redhat-appstudio-tekton-catalog/pipeline-docker-build:032a8745d43a942a247f365fc890b06023ccd67d
+
+# apiVersion: appstudio.redhat.com/v1alpha1
+# kind: ImageRepository
+# metadata:
+#   name: imagerepository-for-component-sample
+#   namespace: sbudhwar-1-tenant
+#   labels:
+#     appstudio.redhat.com/component: my-component
+#     appstudio.redhat.com/application: my-app
+
+# ---
+# apiVersion: appstudio.redhat.com/v1alpha1
+# kind: Application
+# metadata:
+#   name: serverless-operator-konflux
+#   annotations:
+#     # This stub annotation is needed until KFLUXBUGS-1300 is resolved.
+#     hello: world
+# spec:
+#   displayName: serverless-operator-konflux
+
+# ---
+# apiVersion: appstudio.redhat.com/v1alpha1
+# kind: Component
+# metadata:
+#   name: get-rpm-sources-container
+#   annotations:
+#     build.appstudio.openshift.io/request: configure-pac
+#     image.redhat.com/generate: '{"visibility": "public"}'
+#     git-provider: gitlab
+#     git-provider-url: "https://gitlab.cee.redhat.com"
+#     # temp. measure for: https://issues.redhat.com/browse/KFLUXBUGS-1346
+#     build.appstudio.openshift.io/pipeline: '{"name":"docker-build","bundle":"latest"}'
+# spec:
+#   application: tooling
+#   componentName: get-rpm-sources-container
+#   skipGitOpsResourceGeneration: true
+#   source:
+#     git:
+#       revision: main
+#       url: "https://gitlab.cee.redhat.com/sbudhwar/get-rpm-sources-container"
+#       dockerfileUrl: Containerfile
+#       context: ./
+
+# -----------------------
+
+# apiVersion: appstudio.redhat.com/v1alpha1
+# kind: Component
+# metadata:
+#   annotations:
+#     image.redhat.com/generate: "true"
+#     appstudio.openshift.io/pac-provision: request
+#     build.appstudio.openshift.io/pipeline: '{"name":"docker-build","bundle":"latest"}'
+#     build.appstudio.openshift.io/request: configure-pac
+#   name: knative-eventing-controller
+# spec:
+#   componentName: knative-eventing-controller
+#   application: serverless-operator-konflux
+#   build-nudges-ref:
+#     - serverless-bundle
+#   source:
+#     git:
+#       url: https://github.com/openshift-knative/eventing.git
+#       dockerfileUrl: openshift/ci-operator/knative-images/controller/Dockerfile
+#       revision: konflux
+
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  labels:
+    release.appstudio.openshift.io/auto-release: 'true'
+  name: test-rpa
+  namespace: sbudhwar-1-tenant
+spec:
+  applications:
+    - new-test-app
+  origin: sbudhwar-1-tenant
+  pipeline: 
+    pipelineRef:
+      resolver: 'git'
+      params:
+        - name: 'url'
+          value: 'https://github.com/sahil143/pipeline-examples'
+        - name: 'revision'
+          value: 'main'
+        - name: 'pathInRepo'
+          value: 'release.yaml'
+  policy: always-pass-policy
+
